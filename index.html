@@ -68,7 +68,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-
 </head>
 <body>
 <header class="top">
-  <div><h1>공문 초안 작성기</h1><div class="sub">제목과 내용을 넣으면 에듀파인 서식에 맞춘 공문 초안을 만듭니다 · v1.0 (2026. 11. 9.)</div></div>
+  <div><h1>공문 초안 작성기</h1><div class="sub">제목과 내용을 넣으면 에듀파인 서식에 맞춘 공문 초안을 만듭니다 · v1.1 (2026. 11. 9.)</div></div>
   <div class="actions">
     <button class="primary" id="btnOdt" title="한글·LibreOffice에서 열 수 있는 ODT 파일">ODT 내려받기</button>
     <button id="btnCopyRich" title="서식을 유지하여 복사 (에듀파인·한글에 붙여넣기)">서식 복사</button>
@@ -112,7 +112,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-
     <div class="hint" id="leadAuto"></div>
     <label><b>세부 내용</b> — 한 줄에 한 항목. 앞에 공백 2칸(또는 Tab)마다 한 단계 아래로. 번호는 자동</label>
     <textarea id="body" rows="9" placeholder="일시: 2026. 3. 20. 오후 2시~3시&#10;장소 : 시청각실&#10;대상: 1학년 전체&#10;내용&#10;  학교폭력 개념 이해&#10;  신고 방법 안내&#10;- 세부 일정은 붙임 참고&#10;| 구분 | 시간 | 내용 |&#10;| 1부 | 14:00~14:30 | 강의 |"></textarea>
-    <div id="scaffoldWrap" style="display:none;margin-top:6px"><button type="button" id="btnScaffold">자주 쓰는 항목 넣기</button> <span class="hint" id="scaffoldHint"></span></div>
+    <div id="scaffoldWrap" style="display:none;margin-top:6px"><select id="scaffoldSel" style="width:auto;margin-right:4px"></select><button type="button" id="btnScaffold">자주 쓰는 항목 넣기</button> <span class="hint" id="scaffoldHint"></span></div>
     <div class="hint">‘-’, ‘※’, ‘○’로 시작하면 보조 줄, ‘|’로 시작하는 줄이 이어지면 표(첫 줄이 머리행)가 됩니다.</div>
     <label><b>안내 박스</b> (붙임 바로 위, 회색 상자)</label>
     <input type="text" id="box" list="boxList" placeholder="비우면 없음">
@@ -287,6 +287,8 @@ function warnings(allText){
   const ry=[];allText.replace(/([가-힣])(율|률)/g,(m,p,x)=>{const c=p.charCodeAt(0)-0xAC00,jong=c%28;const should=(jong===0||jong===4)?"율":"률";if(x!==should)ry.push(m+"→"+p+should);return m;});
   if(ry.length)w.push("율/률 확인: "+[...new Set(ry)].join(", "));
   if(/[을를]\s*통(한|해|하여)/.test(allText))w.push("번역투 ‘~을 통한/통해’ → ‘~으로’, ‘~하여’로 바꿀 수 있는지 보세요.");
+  if(/(합니다|바랍니다),\s*$/m.test(allText))w.push("문장 끝이 쉼표(,)입니다. 마침표(.)로 고치세요.");
+  if(/(다음|붙임|아래)과?\s+(보고|제출)/.test(allText))w.push("‘다음과 보고합니다’ → ‘다음과 같이 보고합니다’");
   if(/적극\s+협조/.test(allText))w.push("‘적극 협조’ → ‘적극적으로 협조’");
   return w;
 }
@@ -376,7 +378,9 @@ function reportLead(x,hasBody,hasAtt,v){if(v&&v.recvType!=="internal")return obj
 const TYPES={
   plan:{recv:"internal",strip:/\s*\(안\)$/,lead:(x,hasBody,hasAtt)=>planLead(x,hasBody,hasAtt)},
   committee:{recv:"internal",strip:/\s*(구성|조직)?\s*(계획|운영)?\s*(\(안\))?$/,lead:(x)=>obj(x)+" 붙임과 같이 구성하여 운영하고자 합니다."},
-  result:{recv:"internal",strip:/\s*보고\s*(\(안\))?$/,lead:(x,hasBody,hasAtt,c,v)=>reportLead(x,hasBody,hasAtt,v)},
+  result:{recv:"internal",strip:/\s*보고\s*(\([^)]*\))?$/,lead:(x,hasBody,hasAtt,c,v)=>reportLead(x,hasBody,hasAtt,v),
+    scaffold:{"연수·행사 운영 결과":"기간: \n장소: \n대상: \n이수시간: \n세부내용: [붙임] 참고","심사·심의·선정 결과":"심사 일시: \n장소: \n심사 대상: \n심사위원: \n심사 결과: [붙임] 참고","점검·답사·방문 결과":"목적: \n일시: \n장소: \n참석자: \n내용\n  - \n세부내용: [붙임] 참고"},
+    scaffoldHint:"필요한 줄만 남기세요 (실제 결과 보고 163건에서 자주 쓴 항목)"},
   meeting:{recv:"internal",strip:/\s*(결과\s*)?보고\s*(\([^)]*\))?$/,lead:(x,hasBody,hasAtt,c,v)=>reportLead(/결과$/.test(x)?x:x+" 결과",hasBody,hasAtt,v),
     scaffold:"일시: \n장소: \n참석: \n안건: \n회의 결과: [붙임] 참고",scaffoldHint:"일시·장소·참석·안건·회의 결과 — 필요한 줄만 남기세요"},
   meetingPlan:{recv:"internal",strip:/\s*개최(\s*및\s.*)?\s*(계획|안내|알림)?\s*(\(안\))?$/,
@@ -389,7 +393,7 @@ const TYPES={
   free:{lead:null}
 };
 function stemOf(title,type){
-  let t=title.trim().replace(/^\[[^\]]*\]\s*/,"");
+  let t=title.trim().replace(/^\[[^\]]*\]\s*/,"").replace(/^\((?![^)]*차\))[^)]*\)\s*/,"").replace(/^\((제?\s*\d+\s*차)\)\s*/,"$1 "); // [안내]·(성북강북) 같은 머리표는 문장에서 뺌
   const T=TYPES[type];
   if(T.strip){const s=t.replace(T.strip,"").trim();if(s)t=s;}
   if(type==="submit"&&/결과\s*제출$/.test(title.trim()))t=t+" 결과";
@@ -690,6 +694,8 @@ function render(){
   $("leadAuto").textContent=current.leadAuto?"자동 문장: "+current.leadAuto:"";
   $("closingWrap").style.display=v.docType==="notice"?"":"none";
   const TS=TYPES[v.docType];$("scaffoldWrap").style.display=TS.scaffold?"":"none";$("scaffoldHint").textContent=TS.scaffoldHint||"";
+  const sel=$("scaffoldSel"),multi=TS.scaffold&&typeof TS.scaffold==="object";sel.style.display=multi?"":"none";
+  if(multi&&sel.dataset.type!==v.docType){sel.innerHTML=Object.keys(TS.scaffold).map(k=>"<option>"+esc(k)+"</option>").join("");sel.dataset.type=v.docType;}
   $("recvSingleWrap").style.display=v.recvType==="single"?"":"none";
   $("recvListWrap").style.display=v.recvType==="ref"?"":"none";
   renderChecks(current);
@@ -735,7 +741,7 @@ $("btnCopyRich").addEventListener("click",async()=>{render();const html=docHTML(
   try{await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([html],{type:"text/html"}),"text/plain":new Blob([t],{type:"text/plain"})})]);toast("서식을 유지해 복사했습니다");}
   catch(e){const r=document.createRange();r.selectNodeContents($("paper"));const s=getSelection();s.removeAllRanges();s.addRange(r);document.execCommand("copy");s.removeAllRanges();toast("복사했습니다");}});
 function fallbackCopy(t){const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();toast("텍스트를 복사했습니다");}
-$("btnScaffold").addEventListener("click",()=>{const T=TYPES[$("docType").value];if(!T.scaffold)return;const b=$("body");b.value=(b.value.trim()?b.value.replace(/\s+$/,"")+"\n":"")+T.scaffold;render();b.focus();});
+$("btnScaffold").addEventListener("click",()=>{const T=TYPES[$("docType").value];if(!T.scaffold)return;const sc=typeof T.scaffold==="object"?T.scaffold[$("scaffoldSel").value]:T.scaffold;const b=$("body");b.value=(b.value.trim()?b.value.replace(/\s+$/,"")+"\n":"")+sc;render();b.focus();});
 $("btnPrint").addEventListener("click",()=>window.print());
 $("btnNew").addEventListener("click",()=>{if(!confirm("문서 내용(제목·관련·세부 내용·붙임)을 지울까요? 학교·기안자 정보는 남습니다."))return;
   ["title","related","lead","body","box","attach","via"].forEach(f=>$(f).value="");render();});
