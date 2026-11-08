@@ -68,7 +68,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-
 </head>
 <body>
 <header class="top">
-  <div><h1>공문 초안 작성기</h1><div class="sub">제목과 내용을 넣으면 에듀파인 서식에 맞춘 공문 초안을 만듭니다 · v1.1 (2026. 11. 9.)</div></div>
+  <div><h1>공문 초안 작성기</h1><div class="sub">제목과 내용을 넣으면 에듀파인 서식에 맞춘 공문 초안을 만듭니다 · v1.2 (2026. 11. 9.)</div></div>
   <div class="actions">
     <button class="primary" id="btnOdt" title="한글·LibreOffice에서 열 수 있는 ODT 파일">ODT 내려받기</button>
     <button id="btnCopyRich" title="서식을 유지하여 복사 (에듀파인·한글에 붙여넣기)">서식 복사</button>
@@ -96,6 +96,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-
     </select>
     <label><b>제목</b></label>
     <input type="text" id="title" placeholder="예: 2026학년도 학교폭력 예방교육 실시 계획(안)">
+    <label class="chk"><input type="checkbox" id="revised"> 수정 문서 (제목 앞 ‘(수정)’, 본문에 ‘수정사유’ 항목)</label>
+    <div id="revWrap" style="display:none"><label>수정사유</label><input type="text" id="revReason" placeholder="예: 결재선 변경, 일정 변경"></div>
     <label><b>관련</b> — 한 줄에 하나 (비우면 생략)</label>
     <textarea id="related" rows="2" placeholder="2026학년도 학교교육계획&#10;서울특별시교육청 중등교육과-1234(2026. 3. 5.)"></textarea>
     <div id="closingWrap">
@@ -167,8 +169,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-
 (function(){
 "use strict";
 const $=id=>document.getElementById(id);
-const FIELDS=["docType","title","related","closing","lead","body","box","attach","recv","recvList","via","org","slogan","sender"];
-const CHECKS=["optWeek","optSingle","optFix"];
+const FIELDS=["docType","title","related","closing","lead","body","box","attach","recv","recvList","via","org","slogan","sender","revReason"];
+const CHECKS=["revised","optWeek","optSingle","optFix"];
 const KEY="gongmun-draft-v1";
 let logos={L:"",R:""};
 
@@ -411,7 +413,8 @@ function buildModel(v){
   const removed=[];
   const F=(s,c)=>fx.fix(s,c);
   const type=v.docType,T=TYPES[type];
-  const title=F(v.title.trim(),"title");
+  let title=F(v.title.trim(),"title");
+  if(v.revised&&title&&!/^\(수정\)/.test(title))title="(수정)"+title;
   const rel=v.related.split("\n").map(s=>s.trim().replace(/^(\d+\.|[가-힣]\.|-)\s*/,"").replace(/^관련\s*:?\s*/,"")).filter(Boolean).map(s=>F(s,"rel"));
   let bodyText=v.body.replace(/(?<=[.\s])\s*끝\s*\.?\s*$/,()=>{removed.push("직접 쓴 ‘끝.’ 정리 (자동으로 붙입니다)");return "";});
   const att=v.attach.split("\n").map(s=>s.trim()).filter(Boolean).map(s=>{
@@ -431,6 +434,7 @@ function buildModel(v){
   let leadText="";
   if(!free){
     leadText=v.lead.trim()?F(v.lead.trim(),"body"):T.lead(stemOf(title||"○○",type),detail.length>0,hasAtt,v.closing,v);
+    if(v.revised)top.push({kind:"item",level:1,text:"수정사유: "+(F(v.revReason.trim(),"body")||"○○")});
     top.push({kind:"item",level:1,text:leadText});
   }
   const tree=toTree(top.concat(detail),1);
@@ -692,6 +696,7 @@ function render(){
   current=buildModel(v);
   $("paper").innerHTML=docHTML(current);
   $("leadAuto").textContent=current.leadAuto?"자동 문장: "+current.leadAuto:"";
+  $("revWrap").style.display=v.revised?"":"none";
   $("closingWrap").style.display=v.docType==="notice"?"":"none";
   const TS=TYPES[v.docType];$("scaffoldWrap").style.display=TS.scaffold?"":"none";$("scaffoldHint").textContent=TS.scaffoldHint||"";
   const sel=$("scaffoldSel"),multi=TS.scaffold&&typeof TS.scaffold==="object";sel.style.display=multi?"":"none";
